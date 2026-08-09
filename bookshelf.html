@@ -465,7 +465,7 @@ function Bookshelf() {
                     {gaps.map((x) => (
                       <span key={x.k}>
                         <span className="bs-sum-tag">{b.scope === "domestic" ? "未所持" : x.label + " 未所持"}　</span>
-                        <span className="bs-sum-num bs-mincho">{b.kind === "single" ? "この1冊" : missTitles(b[x.k], x.miss)}</span>
+                        <span className="bs-sum-num" style={{ fontFamily: '"Baloo 2","Fredoka",sans-serif' }}>{b.kind === "single" ? "この1冊" : missTitles(b[x.k], x.miss)}</span>
                       </span>
                     ))}
                   </div>

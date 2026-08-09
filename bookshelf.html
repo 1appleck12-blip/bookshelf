@@ -17,6 +17,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 
 <script>
+  // このアプリ専用のローカル保存。ブラウザの localStorage に保存されるので、
+  // 同じ端末・同じブラウザで開けばデータは残ります。
   window.storage = {
     async get(key) {
       const v = localStorage.getItem(key);
@@ -47,6 +49,7 @@ const OLD = "bookshelf:v2";
 const SCOPES = [
   { id: "overseas", label: "海外の作品", sub: "原書と翻訳をまとめて" },
   { id: "domestic", label: "日本語小説", sub: "国内の作家" },
+  { id: "ebook", label: "電子", sub: "電子書籍" },
 ];
 
 const EDS = [
@@ -54,13 +57,16 @@ const EDS = [
   { k: "tr", label: "翻訳" },
 ];
 
-const ed = (total, owned, on = true) => ({ on, total, owned });
+const ed = (total, owned, on = true, vnames = {}) => ({ on, total, owned, vnames });
+const vname = (e, v) => (e && e.vnames && e.vnames[v]) || "";
 
 const SAMPLES = [
-  { id: "s1", scope: "overseas", kind: "series", title: "Harry Potter", alt: "ハリー・ポッター", author: "J.K. Rowling／松岡佑子 訳", orig: ed(7, [1, 2, 3, 5, 7]), tr: ed(8, [1, 2, 3, 4]), audible: ed(7, [1, 2], true), note: "訳書は死の秘宝が上下巻で全8冊", sample: true, addedAt: 6 },
+  { id: "s1", scope: "overseas", kind: "series", title: "Harry Potter", alt: "ハリー・ポッター", author: "J.K. Rowling／松岡佑子 訳", orig: ed(7, [1, 2, 3, 5, 7]), tr: ed(8, [1, 2, 3, 4], true, { 1: "賢者の石", 2: "秘密の部屋", 3: "アズカバンの囚人", 4: "炎のゴブレット", 5: "不死鳥の騎士団", 6: "謎のプリンス", 7: "死の秘宝 上", 8: "死の秘宝 下" }), audible: ed(7, [1, 2], true), note: "訳書は死の秘宝が上下巻で全8冊", sample: true, addedAt: 6 },
   { id: "s2", scope: "overseas", kind: "single", title: "The Catcher in the Rye", alt: "ライ麦畑でつかまえて", author: "J.D. Salinger", orig: ed(1, [1]), tr: ed(1, []), audible: ed(1, [], false), note: "原書はあるので訳書を買うか迷い中", sample: true, addedAt: 5 },
   { id: "s3", scope: "overseas", kind: "series", title: "Millennium", alt: "ミレニアム", author: "Stieg Larsson", orig: ed(3, [], false), tr: ed(3, [1, 3]), audible: ed(3, [], false), note: "訳書だけ集める", sample: true, addedAt: 4 },
   { id: "s4", scope: "overseas", kind: "single", title: "Beyond the Wand", alt: "", author: "Tom Felton", orig: ed(1, [1]), tr: ed(1, [], false), audible: ed(1, [], false), note: "翻訳は自分で読む用に訳している", sample: true, addedAt: 3 },
+  { id: "s8", scope: "ebook", kind: "series", title: "十二国記", alt: "", author: "小野不由美", orig: ed(1, [], false), tr: ed(11, [1, 2, 3, 5], true, { 1: "月の影 影の海", 2: "風の海 迷宮の岸", 3: "東の海神 西の滄海" }), audible: ed(1, [], false), note: "Kindleでまとめ買い予定", sample: true, addedAt: 7 },
+  { id: "s9", scope: "ebook", kind: "series", title: "Once Upon a Broken Heart", alt: "", author: "Stephanie Garber", orig: ed(3, [2, 3], true, { 1: "Once Upon a Broken Heart", 2: "The Ballad of Never After", 3: "A Curse for True Love" }), tr: ed(1, [], false), audible: ed(1, [], false), note: "Kindleで2・3巻所持", sample: true, addedAt: 8 },
   { id: "s5", scope: "domestic", kind: "series", title: "銀河英雄伝説", alt: "", author: "田中芳樹", orig: ed(10, [1, 2, 3, 4, 6, 7]), tr: ed(1, [], false), audible: ed(10, [], false), note: "文庫版", sample: true, addedAt: 2 },
   { id: "s6", scope: "domestic", kind: "single", title: "コンビニ人間", alt: "", author: "村田沙耶香", orig: ed(1, [1]), tr: ed(1, [], false), audible: ed(1, [], false), note: "", sample: true, addedAt: 1 },
 ];
@@ -143,6 +149,9 @@ const CSS = `
 .bs-chip.miss{color:#fff;font-weight:700;border:1px solid var(--deep);
   background:repeating-linear-gradient(135deg,var(--deep) 0 5px,var(--rose) 5px 10px);}
 .bs-off{font-size:12px;color:var(--paleink);padding-bottom:4px;}
+.bs-vnames{display:flex;gap:10px;align-items:flex-start;margin:8px 0 0;padding:8px 10px;background:var(--pale);border-radius:8px;}
+.bs-vnames-label{flex:none;font-size:11px;letter-spacing:.1em;color:var(--deep);font-weight:700;padding-top:2px;}
+.bs-vnames-list{margin:0;display:flex;flex-wrap:wrap;gap:3px 14px;font-size:14.5px;font-weight:600;color:var(--deep);}
 
 .bs-note{font-size:12.5px;color:var(--soft);margin-top:8px;white-space:pre-wrap;}
 .bs-acts{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
@@ -166,10 +175,11 @@ const edsFor = (b) => {
   return b.audible && b.audible.on ? [...base, AUDIBLE] : base;
 };
 const workMiss = (b) => edsFor(b).map((x) => ({ ...x, miss: missOf(b[x.k]) })).filter((x) => x.miss.length);
+const missLabel = (e, miss) => miss.map((v) => (vname(e, v) ? `${v}巻　${vname(e, v)}` : `${v}巻`)).join("／");
 
 const migrate = (old) =>
   old.map((b) => {
-    const e = ed(b.total, b.owned);
+    const e = ed(b.total, b.owned, true, b.vnames || {});
     const off = ed(1, [], false);
     const audible = ed(b.total, [], false);
     if (b.cat === "japanese") return { id: b.id, scope: "domestic", kind: b.kind, title: b.title, alt: "", author: b.author, orig: e, tr: off, audible, note: b.note, addedAt: b.addedAt };
@@ -185,9 +195,10 @@ function Bookshelf() {
   const [kind, setKind] = useState("series");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("added");
-  const [mode, setMode] = useState("gaps"); // "gaps"（既定・欠けあり） | "complete"（完結）
+  const [onlyGaps, setOnlyGaps] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [vnameId, setVnameId] = useState(null);
   const [askDel, setAskDel] = useState(null);
   const [modal, setModal] = useState(null);
   const [importText, setImportText] = useState("");
@@ -261,8 +272,7 @@ function Bookshelf() {
     const key = q.trim().toLowerCase();
     let list = books.filter((b) => b.scope === scope && b.kind === kind);
     if (key) list = list.filter((b) => (b.title + " " + b.alt + " " + b.author + " " + (b.note || "")).toLowerCase().includes(key));
-    const baseCount = list.length;
-    list = mode === "gaps" ? list.filter((b) => workMiss(b).length) : list.filter((b) => !workMiss(b).length);
+    if (onlyGaps) list = list.filter((b) => workMiss(b).length);
     const cnt = (b) => workMiss(b).reduce((n, x) => n + x.miss.length, 0);
     const s = {
       added: (a, b) => b.addedAt - a.addedAt,
@@ -270,8 +280,8 @@ function Bookshelf() {
       title: (a, b) => a.title.localeCompare(b.title, "ja"),
       author: (a, b) => (a.author || "ん").localeCompare(b.author || "ん", "ja"),
     };
-    return { list: [...list].sort(s[sort]), baseCount };
-  }, [books, scope, kind, q, sort, mode]);
+    return [...list].sort(s[sort]);
+  }, [books, scope, kind, q, sort, onlyGaps]);
 
   const gapBooks = useMemo(() => books.filter((b) => workMiss(b).length), [books]);
   const gapVolumes = gapBooks.reduce((n, b) => n + workMiss(b).reduce((m, x) => m + x.miss.length, 0), 0);
@@ -279,10 +289,10 @@ function Bookshelf() {
   const gapIn = (s) => gapBooks.filter((b) => b.scope === s).length;
   const hasSample = books.some((b) => b.sample);
   const gapText = gapBooks
-    .map((b) => `${b.title}${b.alt ? "／" + b.alt : ""}：` + workMiss(b).map((x) => (b.scope === "domestic" ? "" : x.label + " ") + (b.kind === "single" ? "未所持" : x.miss.join("・") + "巻")).join(" ／ "))
+    .map((b) => `${b.title}${b.alt ? "／" + b.alt : ""}：` + workMiss(b).map((x) => (b.scope === "domestic" ? "" : x.label + " ") + (b.kind === "single" ? "未所持" : missLabel(b[x.k], x.miss))).join(" ／ "))
     .join("\n");
 
-  const searchHint = q.trim() && view.list.length === 0 && books.some((b) => (b.title + b.alt + b.author).toLowerCase().includes(q.trim().toLowerCase()));
+  const searchHint = q.trim() && view.length === 0 && books.some((b) => (b.title + b.alt + b.author).toLowerCase().includes(q.trim().toLowerCase()));
 
   return (
     <div className="bs-root">
@@ -321,10 +331,7 @@ function Bookshelf() {
             <button aria-pressed={kind === "series"} onClick={() => setKind("series")}>続きもの</button>
             <button aria-pressed={kind === "single"} onClick={() => setKind("single")}>単巻</button>
           </div>
-          <div className="bs-seg">
-            <button aria-pressed={mode === "gaps"} onClick={() => setMode("gaps")}>欠けあり</button>
-            <button aria-pressed={mode === "complete"} onClick={() => setMode("complete")}>完結</button>
-          </div>
+          <label className="bs-check"><input type="checkbox" checked={onlyGaps} onChange={(e) => setOnlyGaps(e.target.checked)} /> 抜けだけ表示</label>
         </div>
 
         <div className="bs-bar">
@@ -344,10 +351,10 @@ function Bookshelf() {
         {showForm && (
           <div className="bs-panel">
             <p className="bs-eyebrow" style={{ marginBottom: 10 }}>{SCOPES.find((c) => c.id === scope).label} ／ {kind === "series" ? "続きもの" : "単巻"}</p>
-            <label className="bs-field"><span>{scope === "overseas" ? "原題" : "タイトル"}</span>
+            <label className="bs-field"><span>{scope !== "domestic" ? "原題" : "タイトル"}</span>
               <input className="bs-input" style={{ width: "100%" }} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </label>
-            {scope === "overseas" && (
+            {scope !== "domestic" && (
               <label className="bs-field"><span>邦題</span>
                 <input className="bs-input" style={{ width: "100%" }} value={form.alt} onChange={(e) => setForm({ ...form, alt: e.target.value })} placeholder="翻訳のタイトル" />
               </label>
@@ -355,7 +362,7 @@ function Bookshelf() {
             <label className="bs-field"><span>著者・訳者</span>
               <input className="bs-input" style={{ width: "100%" }} value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
             </label>
-            {scope === "overseas" ? (
+            {scope !== "domestic" ? (
               <div className="bs-row" style={{ marginBottom: 10 }}>
                 <label className="bs-check"><input type="checkbox" checked={form.oOn} onChange={(e) => setForm({ ...form, oOn: e.target.checked })} /> 原書を集める</label>
                 {kind === "series" && form.oOn && (
@@ -388,23 +395,17 @@ function Bookshelf() {
             <label className="bs-field"><span>メモ</span>
               <input className="bs-input" style={{ width: "100%" }} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="版元、判型、巻割の違いなど" />
             </label>
-            <p className="bs-hint" style={{ marginBottom: 10 }}>登録すると全部「まだ無い」状態で並びます。持っている巻をタップして薄い色に変えてください。ほとんどの作品はAudibleなしのままで問題ありません。</p>
+            <p className="bs-hint" style={{ marginBottom: 10 }}>登録すると全部「未所持」状態で並びます。持っている巻をタップして薄い色に変えてください。ほとんどの作品はAudibleなしのままで問題ありません。</p>
             <button className="bs-btn" onClick={add}>この棚に入れる</button>
           </div>
         )}
 
         {!ready ? (
           <p className="bs-hint">読み込み中です。</p>
-        ) : view.list.length === 0 ? (
-          <div className="bs-empty">
-            {view.baseCount === 0
-              ? "この棚はまだ空です。「作品を登録」から追加してください。"
-              : mode === "gaps"
-                ? "この棚に抜けはありません。全部「完結」タブにあります。"
-                : "まだ全巻そろった作品はありません。"}
-          </div>
+        ) : view.length === 0 ? (
+          <div className="bs-empty">{onlyGaps ? "この棚に抜けはありません。" : "この棚はまだ空です。「作品を登録」から追加してください。"}</div>
         ) : (
-          view.list.map((b) => {
+          view.map((b) => {
             const gaps = workMiss(b);
             const editing = editId === b.id;
             const eds = edsFor(b);
@@ -412,10 +413,10 @@ function Bookshelf() {
               <div className={"bs-card" + (gaps.length ? " has-gap" : "")} key={b.id}>
                 {editing ? (
                   <>
-                    <label className="bs-field"><span>{b.scope === "overseas" ? "原題" : "タイトル"}</span>
+                    <label className="bs-field"><span>{b.scope !== "domestic" ? "原題" : "タイトル"}</span>
                       <input className="bs-input" style={{ width: "100%" }} value={b.title} onChange={(e) => patch(b.id, { title: e.target.value })} />
                     </label>
-                    {b.scope === "overseas" && (
+                    {b.scope !== "domestic" && (
                       <label className="bs-field"><span>邦題</span>
                         <input className="bs-input" style={{ width: "100%" }} value={b.alt || ""} onChange={(e) => patch(b.id, { alt: e.target.value })} />
                       </label>
@@ -426,7 +427,7 @@ function Bookshelf() {
                     <label className="bs-field"><span>メモ</span>
                       <input className="bs-input" style={{ width: "100%" }} value={b.note || ""} onChange={(e) => patch(b.id, { note: e.target.value })} />
                     </label>
-                    {b.scope === "overseas" && (
+                    {b.scope !== "domestic" && (
                       <div className="bs-row">
                         {EDS.map((x) => (
                           <label className="bs-check" key={x.k}>
@@ -453,8 +454,8 @@ function Bookshelf() {
                   <div className="bs-sum">
                     {gaps.map((x) => (
                       <span key={x.k}>
-                        <span className="bs-sum-tag">{b.scope === "domestic" ? "まだ無い" : x.label + " まだ無い"}　</span>
-                        <span className="bs-sum-num bs-mincho">{b.kind === "single" ? "この1冊" : x.miss.join("・") + " 巻"}</span>
+                        <span className="bs-sum-tag">{b.scope === "domestic" ? "未所持" : x.label + " 未所持"}　</span>
+                        <span className="bs-sum-num bs-mincho">{b.kind === "single" ? "この1冊" : missLabel(b[x.k], x.miss)}</span>
                       </span>
                     ))}
                   </div>
@@ -464,29 +465,67 @@ function Bookshelf() {
 
                 {eds.map((x) => {
                   const e = b[x.k];
+                  const missNamed = b.kind === "series" ? nums(e.total).filter((v) => !e.owned.includes(v) && vname(e, v)) : [];
                   return (
-                    <div className="bs-ed" key={x.k}>
-                      <div className="bs-ed-label">{b.scope === "domestic" ? "巻" : x.label}</div>
-                      {!e.on ? (
-                        <div className="bs-off">集めていません</div>
-                      ) : b.kind === "single" ? (
-                        <button className={"bs-chip " + (e.owned.includes(1) ? "have" : "miss")} onClick={() => toggleVol(b, x.k, 1)}>
-                          {e.owned.includes(1) ? "持っている" : "まだ無い"}
-                        </button>
-                      ) : (
-                        <div className="bs-spines">
-                          {nums(e.total).map((v) => {
-                            const have = e.owned.includes(v);
-                            return (
-                              <button key={v} className={"bs-spine " + (have ? "have" : "miss")} onClick={() => toggleVol(b, x.k, v)}
-                                aria-label={`${x.label}${v}巻 ${have ? "持っている" : "まだ無い"}`}>{v}</button>
-                            );
-                          })}
+                    <div key={x.k}>
+                      <div className="bs-ed">
+                        <div className="bs-ed-label">{b.scope === "domestic" ? "巻" : x.label}</div>
+                        {!e.on ? (
+                          <div className="bs-off">集めていません</div>
+                        ) : b.kind === "single" ? (
+                          <button className={"bs-chip " + (e.owned.includes(1) ? "have" : "miss")} onClick={() => toggleVol(b, x.k, 1)}>
+                            {e.owned.includes(1) ? "持っている" : "未所持"}
+                          </button>
+                        ) : (
+                          <div className="bs-spines">
+                            {nums(e.total).map((v) => {
+                              const have = e.owned.includes(v);
+                              return (
+                                <button key={v} className={"bs-spine " + (have ? "have" : "miss")} onClick={() => toggleVol(b, x.k, v)}
+                                  aria-label={`${x.label}${v}巻 ${have ? "持っている" : "未所持"}`}>{v}</button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      {e.on && missNamed.length > 0 && (
+                        <div className="bs-vnames">
+                          <span className="bs-vnames-label">未所持</span>
+                          <p className="bs-vnames-list">
+                            {missNamed.map((v) => (
+                              <span key={v}>{v}巻　{vname(e, v)}</span>
+                            ))}
+                          </p>
                         </div>
                       )}
                     </div>
                   );
                 })}
+
+                {b.kind === "series" && (
+                  <button className="bs-btn ghost tiny" style={{ marginTop: 8 }} onClick={() => setVnameId(vnameId === b.id ? null : b.id)}>
+                    {vnameId === b.id ? "巻タイトルを閉じる" : "巻タイトルを書く"}
+                  </button>
+                )}
+
+                {vnameId === b.id && b.kind === "series" && (
+                  <div className="bs-panel" style={{ marginTop: 8 }}>
+                    <p className="bs-eyebrow" style={{ marginBottom: 8 }}>巻ごとにタイトルが違う場合、わかる範囲でどうぞ</p>
+                    {eds.filter((x) => b[x.k].on).map((x) => (
+                      <div key={x.k} style={{ marginBottom: 10 }}>
+                        <p className="bs-hint" style={{ marginBottom: 6 }}>{b.scope === "domestic" ? "" : x.label}</p>
+                        {nums(b[x.k].total).map((v) => (
+                          <div key={v} className="bs-row" style={{ marginBottom: 6, alignItems: "center" }}>
+                            <span style={{ fontSize: 12, color: "var(--soft)", width: 28 }}>{v}巻</span>
+                            <input className="bs-input bs-grow" value={vname(b[x.k], v)}
+                              onChange={(e2) => patchEd(b, x.k, { vnames: { ...(b[x.k].vnames || {}), [v]: e2.target.value } })}
+                              placeholder="この巻だけのタイトル（省略可）" />
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {b.note && !editing && <div className="bs-note">{b.note}</div>}
 
@@ -540,7 +579,7 @@ function Bookshelf() {
                               {workMiss(b).map((x) => (
                                 <span key={x.k} style={{ marginRight: 14 }}>
                                   <em>{b.scope === "domestic" ? "" : x.label + " "}</em>
-                                  <b>{b.kind === "single" ? "未所持" : x.miss.join("・") + " 巻"}</b>
+                                  <b>{b.kind === "single" ? "未所持" : missLabel(b[x.k], x.miss)}</b>
                                 </span>
                               ))}
                             </div>

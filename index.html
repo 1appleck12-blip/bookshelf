@@ -553,19 +553,35 @@ function Bookshelf() {
                       </span>
                     ))}
                   <button className="bs-btn ghost tiny" onClick={() => setEditId(editing ? null : b.id)}>{editing ? "編集を終える" : "編集"}</button>
-                  {askDel === b.id ? (
-                    <>
-                      <button className="bs-btn tiny" onClick={() => { persist(books.filter((x) => x.id !== b.id)); setAskDel(null); }}>削除する</button>
-                      <button className="bs-btn ghost tiny" onClick={() => setAskDel(null)}>やめる</button>
-                    </>
-                  ) : (
-                    <button className="bs-btn ghost tiny" onClick={() => setAskDel(b.id)}>削除</button>
-                  )}
+                  {SCOPES.filter((c) => c.id !== b.scope).map((c) => (
+                    <button key={c.id} className="bs-btn ghost tiny" onClick={() => patch(b.id, { scope: c.id })}>
+                      {c.label}へ移動
+                    </button>
+                  ))}
+                  <button className="bs-btn ghost tiny" onClick={() => setAskDel(b.id)}>削除</button>
                 </div>
               </div>
             );
           })
         )}
+
+        {askDel && (() => {
+          const target = books.find((b) => b.id === askDel);
+          if (!target) return null;
+          return (
+            <div className="bs-modal" onClick={() => setAskDel(null)}>
+              <div className="bs-modal-in" onClick={(e) => e.stopPropagation()}>
+                <h2 className="bs-mincho" style={{ fontSize: 20, margin: "0 0 10px" }}>削除しますか？</h2>
+                <p className="bs-hint" style={{ fontSize: 14, marginBottom: 4 }}>この作品を棚から削除します。元に戻せません。</p>
+                <p className="bs-ct" style={{ margin: "10px 0 20px" }}>{target.title}</p>
+                <div className="bs-acts">
+                  <button className="bs-btn ghost" onClick={() => setAskDel(null)}>いいえ</button>
+                  <button className="bs-btn" style={{ background: "var(--deep)" }} onClick={() => { persist(books.filter((x) => x.id !== askDel)); setAskDel(null); }}>はい</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {modal === "gaps" && (
           <div className="bs-modal" onClick={() => setModal(null)}>
